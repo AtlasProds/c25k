@@ -124,7 +124,7 @@ class WorkoutEngine(
                 // Emit countdown tick event
                 _events.value = WorkoutEvent.CountdownTick(i)
                 android.util.Log.d("WorkoutEngine", "Countdown tick: $i")
-                delay(1000)
+                delay(TIMER_UPDATE_INTERVAL_MS)
             }
             
             // Prevent multiple completions
@@ -314,26 +314,16 @@ class WorkoutEngine(
             return
         }
         
-        // Calculate elapsed time since last tick
-        val now = SystemClock.elapsedRealtime()
-        val elapsedMillis = if (lastTickTime > 0) now - lastTickTime else 0
-        lastTickTime = now
-        
-        // Convert to seconds, ensuring we don't count less than a full second
-        val elapsedSeconds = (elapsedMillis / 1000).toInt()
-        if (elapsedSeconds <= 0) return // Skip if less than a second has passed
-        
-        // Get current segment
-        val currentSegment = segments[currentSegmentIndex]
-        var remainingSeconds = _state.value.remainingTimeSeconds - elapsedSeconds
-        val totalElapsed = _state.value.elapsedTimeSeconds + elapsedSeconds
+        // Decrement remaining time by 1 each tick (simulated second)
+        var remainingSeconds = _state.value.remainingTimeSeconds - 1
+        val totalElapsed = _state.value.elapsedTimeSeconds + 1 // Increment total elapsed time by 1 simulated second
         
         if (remainingSeconds <= 0) {
             // Current segment completed
             segmentsCompleted = true
             
             // Emit segment completed event
-            emitSegmentCompleted(currentSegment)
+            emitSegmentCompleted(segments[currentSegmentIndex])
             
             // Move to next segment if available
             val nextSegmentIndex = currentSegmentIndex + 1
