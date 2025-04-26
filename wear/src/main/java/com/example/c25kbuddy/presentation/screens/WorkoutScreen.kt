@@ -173,19 +173,14 @@ fun WorkoutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Complete Workout?",
-                    fontSize = 18.sp,
+                    text = "Complete workout?",
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 
-                Text(
-                    text = "This will mark your workout as completed.",
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 20.dp)
-                )
-                
+                                
                 Button(
                     onClick = {
                         viewModel.finishWorkout()
@@ -196,11 +191,12 @@ fun WorkoutScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(44.dp)
                 ) {
                     Text(
-                        "Complete Workout",
-                        fontSize = 16.sp
+                        "Complete",
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
                 
@@ -215,11 +211,12 @@ fun WorkoutScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(44.dp)
                 ) {
                     Text(
                         "Cancel",
-                        fontSize = 16.sp
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
