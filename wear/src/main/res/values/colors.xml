@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#2196F3</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="accent">#FFA000</color>
+    <color name="accent_dark">#FF8F00</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="background_dark">#000000</color>
+    <color name="surface_dark">#121212</color>
+
+    <!-- Activity type colors -->
+    <color name="warmup_color">#FF9800</color>
+    <color name="walk_color">#4CAF50</color>
+    <color name="run_color">#F44336</color>
+    <color name="cooldown_color">#03A9F4</color>
+
+    <!-- Status colors -->
+    <color name="completed">#4CAF50</color> 
+    <color name="in_progress">#FF9800</color>
+    <color name="upcoming">#2196F3</color>
+</resources> 
