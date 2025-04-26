@@ -12,6 +12,7 @@
     <uses-feature android:name="android.hardware.type.watch" />
 
     <application
+        android:name=".C25KApplication"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher_foreground"
         android:label="@string/app_name"

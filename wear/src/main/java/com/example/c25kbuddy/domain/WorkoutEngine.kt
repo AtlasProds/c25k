@@ -51,6 +51,9 @@ class WorkoutEngine(
      * Start a workout for the given week and day
      */
     suspend fun startWorkout(week: Int, day: Int) {
+        // Reset state first
+        _state.value = WorkoutState()
+        
         // Stop any active timer
         stopTimer()
         
@@ -61,16 +64,30 @@ class WorkoutEngine(
         val program = repository.loadProgram()
         
         // Get the day
-        val workoutDay = program.getDay(week, day) ?: return
+        val workoutDay = program.getDay(week, day) ?: run {
+            android.util.Log.e("WorkoutEngine", "Failed to find workout for Week $week Day $day")
+            // Explicitly set isActive to false to indicate failure
+            _state.value = _state.value.copy(isActive = false)
+            // Emit an error event
+            _events.value = WorkoutEvent.WorkoutError("Workout not found for Week $week Day $day")
+            return
+        }
         
         // Get the segments
         segments = repository.createWorkoutSegments(workoutDay)
-        if (segments.isEmpty()) return
+        if (segments.isEmpty()) {
+            android.util.Log.e("WorkoutEngine", "No segments found for workout Week $week Day $day")
+            // Explicitly set isActive to false to indicate failure
+            _state.value = _state.value.copy(isActive = false)
+            // Emit an error event
+            _events.value = WorkoutEvent.WorkoutError("No segments found for Week $week Day $day")
+            return
+        }
         
         // Calculate total time
         val totalTime = segments.sumOf { it.durationSeconds }
         
-        // Initialize workout state with preparing mode
+        // Explicitly set isActive to true before other operations
         _state.value = WorkoutState(
             isActive = true,
             isPaused = false,
@@ -85,6 +102,8 @@ class WorkoutEngine(
             totalTimeSeconds = totalTime,
             totalSegments = segments.size
         )
+        
+        android.util.Log.d("WorkoutEngine", "Workout state initialized: isActive=${_state.value.isActive}")
         
         // Start countdown
         startCountdown()

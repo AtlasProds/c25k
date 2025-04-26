@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.os.Build
 import android.os.IBinder
 import android.os.Vibrator
 import androidx.lifecycle.AndroidViewModel
@@ -159,8 +160,16 @@ class WorkoutViewModel(
         
         viewModelScope.launch {
             engine.state.collect { state ->
-                android.util.Log.d("WorkoutViewModel", "Received state update: remaining=${state.remainingTimeSeconds}")
+                android.util.Log.d("WorkoutViewModel", "Received state update: remaining=${state.remainingTimeSeconds}, active=${state.isActive}")
                 _workoutState.value = state
+                
+                // Update UI state immediately when workout active state changes
+                _uiState.update { it.copy(
+                    isWorkoutActive = state.isActive,
+                    isWorkoutPaused = state.isPaused,
+                    currentWeek = state.currentWeek,
+                    currentDay = state.currentDay
+                )}
             }
         }
         
@@ -169,6 +178,30 @@ class WorkoutViewModel(
                 if (event != null) {
                     android.util.Log.d("WorkoutViewModel", "Received event: ${event::class.simpleName}")
                     _lastEvent.value = event
+                    
+                    // Handle specific events
+                    when (event) {
+                        is WorkoutEvent.WorkoutError -> {
+                            // Update the UI state with the error message
+                            _uiState.update { it.copy(
+                                errorMessage = event.errorMessage,
+                                permissionError = true
+                            )}
+                            android.util.Log.e("WorkoutViewModel", "Workout error: ${event.errorMessage}")
+                        }
+                        
+                        is WorkoutEvent.WorkoutFinished -> {
+                            // Ensure the UI state reflects that the workout is no longer active
+                            _uiState.update { it.copy(
+                                isWorkoutActive = false,
+                                isWorkoutPaused = false
+                            )}
+                        }
+                        
+                        else -> {
+                            // No additional handling for other event types
+                        }
+                    }
                 }
             }
         }
@@ -220,7 +253,13 @@ class WorkoutViewModel(
             
             try {
                 android.util.Log.d("WorkoutViewModel", "Starting workout service for Week $week Day $day")
-                context.startForegroundService(intent)
+                
+                // On Android 12+ we should use startForegroundService
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
                 
                 // Make sure we're bound to the service
                 if (!bound) {
@@ -235,7 +274,6 @@ class WorkoutViewModel(
             }
         } else {
             // Permissions are missing
-            // Update UI state to show error
             android.util.Log.e("WorkoutViewModel", "Missing required permissions for health tracking")
             _uiState.update { it.copy(
                 permissionError = true,
@@ -251,6 +289,8 @@ class WorkoutViewModel(
         val activityRecognition = android.Manifest.permission.ACTIVITY_RECOGNITION
         val highSamplingRate = android.Manifest.permission.HIGH_SAMPLING_RATE_SENSORS
         val foregroundServiceHealth = android.Manifest.permission.FOREGROUND_SERVICE_HEALTH
+        val foregroundService = android.Manifest.permission.FOREGROUND_SERVICE
+        val postNotifications = android.Manifest.permission.POST_NOTIFICATIONS
         
         // Check if we have FOREGROUND_SERVICE_HEALTH permission
         val hasForegroundServiceHealth = android.content.pm.PackageManager.PERMISSION_GRANTED == 
@@ -262,8 +302,20 @@ class WorkoutViewModel(
         
         val hasHighSamplingRate = android.content.pm.PackageManager.PERMISSION_GRANTED == 
             context.checkSelfPermission(highSamplingRate)
+        
+        val hasForegroundService = android.content.pm.PackageManager.PERMISSION_GRANTED ==
+            context.checkSelfPermission(foregroundService)
             
-        return hasForegroundServiceHealth && (hasActivityRecognition || hasHighSamplingRate)
+        val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.content.pm.PackageManager.PERMISSION_GRANTED == context.checkSelfPermission(postNotifications)
+        } else {
+            true // Permission not required before Android 13
+        }
+            
+        return hasForegroundServiceHealth && 
+               (hasActivityRecognition || hasHighSamplingRate) && 
+               hasForegroundService && 
+               hasNotificationPermission
     }
     
     /**
@@ -271,7 +323,13 @@ class WorkoutViewModel(
      */
     fun startNextWorkout() {
         val progress = userProgress.value
-        val (nextWeek, nextDay) = progress.getNextWorkout()
+        var (nextWeek, nextDay) = progress.getNextWorkout()
+        
+        // Fix invalid week value - ensure week is at least 1
+        if (nextWeek < 1) {
+            nextWeek = 1
+            android.util.Log.d("WorkoutViewModel", "Corrected invalid week value to Week $nextWeek Day $nextDay")
+        }
         
         android.util.Log.d("WorkoutViewModel", "Starting next workout: Week $nextWeek Day $nextDay")
         
@@ -305,7 +363,14 @@ class WorkoutViewModel(
             
             try {
                 android.util.Log.d("WorkoutViewModel", "Starting workout service for Week $nextWeek Day $nextDay")
-                context.startForegroundService(intent)
+                
+                // On Android 12+ we should use startForegroundService
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    context.startForegroundService(intent)
+                } else {
+                    context.startService(intent)
+                }
+                
                 android.util.Log.d("WorkoutViewModel", "WorkoutService started successfully")
                 
                 // Make sure we're bound to the service

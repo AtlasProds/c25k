@@ -92,8 +92,24 @@ fun WorkoutScreen(
     LaunchedEffect(workoutState.isActive) {
         Log.d("WorkoutScreen", "Workout active state changed: ${workoutState.isActive}")
         if (!workoutState.isActive) {
-            Log.d("WorkoutScreen", "Workout not active, navigating back")
-            onNavigateUp()
+            // Add a longer delay to give the service time to start the workout
+            delay(1000)
+            
+            // Check multiple times with delays to ensure it's truly not active
+            var checkCount = 0
+            while (checkCount < 3 && !viewModel.workoutState.value.isActive) {
+                Log.d("WorkoutScreen", "Workout still not active, waiting (check ${checkCount + 1}/3)")
+                delay(500)
+                checkCount++
+            }
+            
+            // Only navigate back if still not active after checks
+            if (!viewModel.workoutState.value.isActive) {
+                Log.d("WorkoutScreen", "Workout not active after multiple checks, navigating back")
+                onNavigateUp()
+            } else {
+                Log.d("WorkoutScreen", "Workout became active, staying on screen")
+            }
         }
     }
     

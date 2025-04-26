@@ -24,7 +24,9 @@ import com.example.c25kbuddy.presentation.screens.HomeScreen
 import com.example.c25kbuddy.presentation.screens.WorkoutScreen
 import com.example.c25kbuddy.presentation.theme.C25KBuddyTheme
 import com.example.c25kbuddy.presentation.viewmodel.WorkoutViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     
     private val requiredPermissions = mutableListOf(

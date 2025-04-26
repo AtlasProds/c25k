@@ -171,6 +171,9 @@ sealed class WorkoutEvent {
     ) : WorkoutEvent()
     
     data object CountdownFinished : WorkoutEvent()
+    
+    // New event type for workout errors
+    data class WorkoutError(val errorMessage: String) : WorkoutEvent()
 }
 
 /**

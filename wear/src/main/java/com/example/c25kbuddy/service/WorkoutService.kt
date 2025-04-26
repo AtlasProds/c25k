@@ -20,14 +20,17 @@ import com.example.c25kbuddy.data.model.WorkoutState
 import com.example.c25kbuddy.data.repository.C25KRepository
 import com.example.c25kbuddy.domain.WorkoutEngine
 import com.example.c25kbuddy.presentation.MainActivity
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 
+@AndroidEntryPoint
 class WorkoutService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
@@ -84,6 +87,9 @@ class WorkoutService : Service() {
             "C25KBuddy:WorkoutWakeLock"
         )
         
+        // Create notification channel
+        createNotificationChannel()
+        
         // Collect workout events to update notification
         serviceScope.launch {
             workoutEngine.events.collect { event ->
@@ -130,15 +136,15 @@ class WorkoutService : Service() {
                         workoutEngine.stopWorkout()
                     }
                     
-                    // Load workout data for the specified week and day
-                    startWorkout(week, day)
-                    
-                    // Update notification
+                    // Create and show notification immediately to avoid ANR
                     val notification = createNotification()
                     startForeground(NOTIFICATION_ID, notification)
                     
                     // Acquire wake lock to keep the device from sleeping during workout
                     acquireWakeLock()
+                    
+                    // Load workout data for the specified week and day
+                    startWorkout(week, day)
                 } catch (e: Exception) {
                     android.util.Log.e("WorkoutService", "Error starting workout", e)
                     stopSelf()
@@ -274,12 +280,29 @@ class WorkoutService : Service() {
         currentWeek = week
         currentDay = day
         
+        // To ensure state is properly synchronized,
+        // we add a slight delay before starting the workout
         serviceScope.launch {
             try {
+                // First, ensure we have a notification showing
+                val notification = createNotification()
+                startForeground(NOTIFICATION_ID, notification)
+                
+                // Give the service a moment to fully initialize
+                delay(500)
+                
                 workoutEngine.startWorkout(week, day)
-                android.util.Log.d("WorkoutService", "Workout started successfully: Week $week Day $day")
+                
+                // Check if the workout actually started successfully by examining the state
+                if (workoutEngine.state.value.isActive) {
+                    android.util.Log.d("WorkoutService", "Workout started successfully: Week $week Day $day")
+                } else {
+                    android.util.Log.e("WorkoutService", "Workout failed to start for Week $week Day $day")
+                    stopSelf() // Stop the service since we couldn't start the workout
+                }
             } catch (e: Exception) {
                 android.util.Log.e("WorkoutService", "Error starting workout in engine", e)
+                stopSelf() // Stop the service since there was an error
             }
         }
     }
