@@ -1,130 +1,142 @@
 {
-  "weeks": [
-    {
-      "week": 1,
-      "days": [
-        {
-          "segments": [300, 60, 90, 60, 90, 60, 90, 60, 90, 60, 90, 60, 90, 60, 90, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 2,
-      "days": [
-        {
-          "segments": [300, 90, 120, 90, 120, 90, 120, 90, 120, 90, 120, 90, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 3,
-      "days": [
-        {
-          "segments": [300, 90, 180, 90, 180, 90, 180, 90, 180, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 4,
-      "days": [
-        {
-          "segments": [300, 180, 90, 300, 90, 300, 90, 180, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 5,
-      "days": [
-        {
-          "segments": [300, 300, 90, 300, 90, 300, 300]
-        },
-        {
-          "segments": [300, 480, 90, 480, 300]
-        },
-        {
-          "segments": [300, 1200, 300]
-        }
-      ]
-    },
-    {
-      "week": 6,
-      "days": [
-        {
-          "segments": [300, 300, 90, 480, 90, 300, 300]
-        },
-        {
-          "segments": [300, 600, 90, 600, 300]
-        },
-        {
-          "segments": [300, 1320, 300]
-        }
-      ]
-    },
-    {
-      "week": 7,
-      "days": [
-        {
-          "segments": [300, 1500, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 8,
-      "days": [
-        {
-          "segments": [300, 1680, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    },
-    {
-      "week": 9,
-      "days": [
-        {
-          "segments": [300, 1800, 300]
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        },
-        {
-          "segmentsReference": "same_as_day_1"
-        }
-      ]
-    }
-  ]
-} 
+    "weeks": [
+      {
+        "week": 1,
+        "days": [
+          {
+            "segments": [
+              300,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60,
+              300
+            ]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 2,
+        "days": [
+          {
+            "segments": [300, 90, 120, 90, 120, 90, 120, 90, 120, 90, 120, 90, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 3,
+        "days": [
+          {
+            "segments": [300, 90, 180, 90, 180, 90, 180, 90, 180, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 4,
+        "days": [
+          {
+            "segments": [300, 180, 90, 300, 150, 180, 90, 300, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 5,
+        "days": [
+          {
+            "segments": [300, 300, 90, 300, 90, 300, 300]
+          },
+          {
+            "segments": [300, 480, 90, 480, 300]
+          },
+          {
+            "segments": [300, 1200, 300]
+          }
+        ]
+      },
+      {
+        "week": 6,
+        "days": [
+          {
+            "segments": [300, 300, 90, 480, 90, 300, 300]
+          },
+          {
+            "segments": [300, 600, 90, 600, 300]
+          },
+          {
+            "segments": [300, 1500, 300]
+          }
+        ]
+      },
+      {
+        "week": 7,
+        "days": [
+          {
+            "segments": [300, 1500, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 8,
+        "days": [
+          {
+            "segments": [300, 1680, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      },
+      {
+        "week": 9,
+        "days": [
+          {
+            "segments": [300, 1800, 300]
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          },
+          {
+            "segmentsReference": "same_as_day_1"
+          }
+        ]
+      }
+    ]
+  }
+  
