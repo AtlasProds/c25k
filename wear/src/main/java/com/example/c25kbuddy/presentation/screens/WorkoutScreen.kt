@@ -70,6 +70,7 @@ import kotlin.random.Random
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.activity.compose.BackHandler
 
 @Composable
 fun WorkoutScreen(
@@ -86,42 +87,86 @@ fun WorkoutScreen(
     // Track whether to show the controls screen
     var showControlsScreen by remember { mutableStateOf(false) }
     
-    // When any WorkoutFinished event is received, navigate back immediately
-    LaunchedEffect(lastEvent) {
-        if (lastEvent is WorkoutEvent.WorkoutFinished) {
-            Log.d("WorkoutScreen", "Workout finished, navigating back")
-            onNavigateUp()
-        }
-    }
-    
-    // If workout is not active, navigate back
-    LaunchedEffect(workoutState.isActive) {
-        Log.d("WorkoutScreen", "Workout active state changed: ${workoutState.isActive}")
-        if (!workoutState.isActive) {
-            // Add a longer delay to give the service time to start the workout
-            delay(1000)
-            
-            // Check multiple times with delays to ensure it's truly not active
-            var checkCount = 0
-            while (checkCount < 3 && !viewModel.workoutState.value.isActive) {
-                Log.d("WorkoutScreen", "Workout still not active, waiting (check ${checkCount + 1}/3)")
-                delay(500)
-                checkCount++
-            }
-            
-            // Only navigate back if still not active after checks
-            if (!viewModel.workoutState.value.isActive) {
-                Log.d("WorkoutScreen", "Workout not active after multiple checks, navigating back")
-                onNavigateUp()
-            } else {
-                Log.d("WorkoutScreen", "Workout became active, staying on screen")
-            }
-        }
-    }
-    
     // Track if we should show confirmation dialog
     var showStopConfirmation by remember { mutableStateOf(false) }
     var showExitConfirmation by remember { mutableStateOf(false) }
+    
+    // Handle back button using BackHandler from the accompanist library
+    BackHandler(enabled = true) {
+        Log.d("WorkoutScreen", "Back pressed, showing exit confirmation")
+        showExitConfirmation = true
+    }
+    
+    // When any WorkoutFinished event is received, navigate back immediately
+    LaunchedEffect(lastEvent) {
+        when (lastEvent) {
+            is WorkoutEvent.WorkoutFinished -> {
+                // Only navigate away if the workout is confirmed to be not active
+                // This prevents navigating back if a new workout was just started
+                if (!workoutState.isActive) {
+                    Log.d("WorkoutScreen", "Workout finished event received and workout is not active, navigating back")
+                    onNavigateUp()
+                } else {
+                    Log.d("WorkoutScreen", "Ignoring WorkoutFinished event because workout is active")
+                }
+            }
+            is WorkoutEvent.WorkoutStarted -> {
+                Log.d("WorkoutScreen", "Workout started event received")
+                // No need to navigate away since we're already on the workout screen
+                // This event is just to confirm the workout has officially started
+            }
+            else -> {
+                // Other events don't require navigation changes
+            }
+        }
+    }
+    
+    // Monitor if workout is active and navigate back if not
+    LaunchedEffect(workoutState.isActive) {
+        android.util.Log.d("WorkoutScreen", "Detected change in workout active state: ${workoutState.isActive}")
+        
+        // If workout is active, no need to do anything
+        if (workoutState.isActive) {
+            android.util.Log.d("WorkoutScreen", "Workout is active, no need to navigate back")
+            return@LaunchedEffect
+        }
+        
+        // If we get here, workout is not active
+        // Wait a bit longer in case state is still being initialized
+        delay(1000)
+        
+        // Check if workout became active 
+        if (viewModel.workoutState.value.isActive) {
+            android.util.Log.d("WorkoutScreen", "Workout became active after wait, staying on screen")
+            return@LaunchedEffect
+        }
+        
+        // Check if we're just starting up - don't navigate away immediately
+        if (workoutState.isPreparing) {
+            android.util.Log.d("WorkoutScreen", "Workout is in preparing state, giving more time")
+            delay(2000)
+            
+            if (viewModel.workoutState.value.isActive) {
+                android.util.Log.d("WorkoutScreen", "Workout became active after preparing wait, staying on screen")
+                return@LaunchedEffect
+            }
+        }
+        
+        // Check if there's an active workout event that might restart the workout
+        if (lastEvent is WorkoutEvent.WorkoutStarted) {
+            android.util.Log.d("WorkoutScreen", "Found WorkoutStarted event, waiting longer")
+            delay(2000)
+            
+            if (viewModel.workoutState.value.isActive) {
+                android.util.Log.d("WorkoutScreen", "Workout became active after event check, staying on screen")
+                return@LaunchedEffect
+            }
+        }
+        
+        // If we reach here, workout is truly not active
+        android.util.Log.d("WorkoutScreen", "Workout is not active after all checks, navigating back")
+        onNavigateUp()
+    }
     
     // Show confirmation dialog if needed
     if (showStopConfirmation) {
@@ -268,6 +313,10 @@ fun WorkoutScreen(
                 showControlsScreen = false
             },
             onStop = {
+                showExitConfirmation = true
+                showControlsScreen = false
+            },
+            onComplete = {
                 showStopConfirmation = true
                 showControlsScreen = false
             },
@@ -641,6 +690,7 @@ fun WorkoutControlsScreen(
     isPaused: Boolean,
     onPauseResume: () -> Unit,
     onStop: () -> Unit,
+    onComplete: () -> Unit,
     onRestart: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -660,18 +710,17 @@ fun WorkoutControlsScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // 2x2 Grid of controls
-            // First row: Stop and Pause/Resume
+            // First row: Exit and Pause/Resume
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                // Stop Button
+                // Stop Button - using stop emoji as requested
                 ControlButton(
                     onClick = onStop,
-                    emoji = "🛑",
+                    emoji = "🛑",  // Changed back to stop sign emoji
                     label = "Stop",
                     backgroundColor = Color.Red.copy(alpha = 0.8f)
                 )
@@ -687,11 +736,19 @@ fun WorkoutControlsScreen(
                 )
             }
             
-            // Second row: Restart and Back
+            // Second row: Complete, Restart and Back
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
+                // Complete button - new button for marking as done
+                ControlButton(
+                    onClick = onComplete,
+                    emoji = "✅",
+                    label = "Complete",
+                    backgroundColor = Color.Green.copy(alpha = 0.8f)
+                )
+                
                 // Restart Button
                 ControlButton(
                     onClick = onRestart,

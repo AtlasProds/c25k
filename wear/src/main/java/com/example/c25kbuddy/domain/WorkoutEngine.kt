@@ -4,6 +4,7 @@ import android.os.SystemClock
 import android.os.VibrationEffect
 import android.os.Vibrator
 import com.example.c25kbuddy.data.model.ActivityType
+import com.example.c25kbuddy.data.model.C25KProgram
 import com.example.c25kbuddy.data.model.Day
 import com.example.c25kbuddy.data.model.WorkoutEvent
 import com.example.c25kbuddy.data.model.WorkoutSegment
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 
 /**
  * Core engine that manages the workout state, timer, and transitions
@@ -30,6 +32,9 @@ class WorkoutEngine(
         private const val TIMER_UPDATE_INTERVAL_MS = 1000L  // Update once per second
         private const val VIBRATION_DURATION_MS = 600L
     }
+    
+    // C25K program data - load from repository synchronously to prevent timing issues
+    private val program: C25KProgram = runBlocking { repository.loadProgram() }
     
     // Workout state
     private val _state = MutableStateFlow(WorkoutState())
@@ -50,112 +55,100 @@ class WorkoutEngine(
     /**
      * Start a workout for the given week and day
      */
-    suspend fun startWorkout(week: Int, day: Int) {
-        // Reset state first
+    fun startWorkout(week: Int, day: Int): Boolean {
+        // Reset state at the beginning
         _state.value = WorkoutState()
         
-        // Stop any active timer
-        stopTimer()
+        android.util.Log.d("WorkoutEngine", "Starting workout for week $week, day $day")
         
-        // Reset tracking variables
-        segmentsCompleted = false
-        
-        // Load the program if needed
-        val program = repository.loadProgram()
-        
-        // Get the day
-        val workoutDay = program.getDay(week, day) ?: run {
-            android.util.Log.e("WorkoutEngine", "Failed to find workout for Week $week Day $day")
-            // Explicitly set isActive to false to indicate failure
-            _state.value = _state.value.copy(isActive = false)
-            // Emit an error event
-            _events.value = WorkoutEvent.WorkoutError("Workout not found for Week $week Day $day")
-            return
+        // Find the workout day
+        val workoutDay = program.weeks.getOrNull(week - 1)?.days?.getOrNull(day - 1)
+        if (workoutDay == null) {
+            android.util.Log.e("WorkoutEngine", "Could not find workout day for week $week, day $day")
+            return false
         }
         
-        // Get the segments
+        // Get segments for the day - convert them to workout segments
         segments = repository.createWorkoutSegments(workoutDay)
         if (segments.isEmpty()) {
-            android.util.Log.e("WorkoutEngine", "No segments found for workout Week $week Day $day")
-            // Explicitly set isActive to false to indicate failure
-            _state.value = _state.value.copy(isActive = false)
-            // Emit an error event
-            _events.value = WorkoutEvent.WorkoutError("No segments found for Week $week Day $day")
-            return
+            android.util.Log.e("WorkoutEngine", "No segments found for week $week, day $day")
+            return false
         }
         
-        // Calculate total time
-        val totalTime = segments.sumOf { it.durationSeconds }
-        
-        // Explicitly set isActive to true before other operations
-        _state.value = WorkoutState(
+        // Initialize state
+        _state.value = _state.value.copy(
             isActive = true,
             isPaused = false,
-            isPreparing = true,
-            countdownSeconds = 5, // 5-second countdown
             currentWeek = week,
             currentDay = day,
-            currentSegmentIndex = 0,
-            currentSegment = segments.firstOrNull(),
-            remainingTimeSeconds = segments.firstOrNull()?.durationSeconds ?: 0,
-            elapsedTimeSeconds = 0,
-            totalTimeSeconds = totalTime,
             totalSegments = segments.size
         )
         
-        android.util.Log.d("WorkoutEngine", "Workout state initialized: isActive=${_state.value.isActive}")
+        android.util.Log.d("WorkoutEngine", "Initialized workout state: active=${_state.value.isActive}")
         
-        // Start countdown
-        startCountdown()
+        // Start countdown timer
+        android.util.Log.d("WorkoutEngine", "Starting countdown timer")
+        startCountdown(5)
+        
+        // Emit an event that workout has started
+        _events.value = WorkoutEvent.WorkoutStarted
+        
+        return true
     }
     
     /**
-     * Start the countdown timer before the workout begins
+     * Start a countdown before beginning the workout
      */
-    private fun startCountdown() {
-        // Cancel any existing timer
-        timerJob?.cancel()
+    private fun startCountdown(countdownFrom: Int) {
+        android.util.Log.d("WorkoutEngine", "Starting $countdownFrom-second countdown")
         
-        android.util.Log.d("WorkoutEngine", "Starting 5-second countdown")
+        // Ensure any previous timer is canceled
+        timerJob?.cancel()
+        timerJob = null
+        lastTickTime = 0L
+        
+        // Reset countdown completed flag
+        var countdownCompleted = false
         
         timerJob = coroutineScope.launch {
-            while (isActive && _state.value.countdownSeconds > 0) {
+            // Start countdown
+            for (i in countdownFrom downTo 1) {
                 // Emit countdown tick event
-                _events.value = WorkoutEvent.CountdownTick(_state.value.countdownSeconds)
-                
-                // Wait 1 second
+                _events.value = WorkoutEvent.CountdownTick(i)
+                android.util.Log.d("WorkoutEngine", "Countdown tick: $i")
                 delay(1000)
-                
-                // Update countdown
-                _state.value = _state.value.copy(
-                    countdownSeconds = _state.value.countdownSeconds - 1
-                )
             }
             
-            // Countdown finished
-            if (isActive) {
-                // Vibrate to indicate countdown finished
+            // Prevent multiple completions
+            if (!countdownCompleted) {
+                countdownCompleted = true
+                
+                // Vibrate to indicate countdown complete
                 val vibrationEffect = VibrationEffect.createOneShot(
-                    500, // 500ms vibration
+                    VIBRATION_DURATION_MS,
                     VibrationEffect.DEFAULT_AMPLITUDE
                 )
                 vibrator.vibrate(vibrationEffect)
                 
                 // Emit countdown finished event
                 _events.value = WorkoutEvent.CountdownFinished
+                android.util.Log.d("WorkoutEngine", "Countdown finished")
                 
-                // Start the actual workout
-                _state.value = _state.value.copy(
-                    isPreparing = false,
-                    countdownSeconds = 0
-                )
-                
-                // Start the main workout timer
+                // Start the actual workout timer
                 startTimer()
                 
-                // Emit segment started event for the first segment
-                val firstSegment = segments.firstOrNull() ?: return@launch
-                emitSegmentStarted(firstSegment)
+                // Start first segment
+                if (segments.isNotEmpty()) {
+                    val firstSegment = segments[0]
+                    _state.value = _state.value.copy(
+                        currentSegmentIndex = 0,
+                        currentSegment = firstSegment,
+                        remainingTimeSeconds = firstSegment.durationSeconds
+                    )
+                    
+                    // Emit segment started event
+                    emitSegmentStarted(firstSegment)
+                }
             }
         }
     }
@@ -183,16 +176,23 @@ class WorkoutEngine(
     }
     
     /**
-     * Stop the workout
+     * Stop the workout completely
      */
     fun stopWorkout() {
-        stopTimer()
-        // Just set the workout as inactive without emitting completion events
-        // This way the workout won't be marked as completed
-        _state.value = _state.value.copy(isActive = false, isPaused = false)
+        android.util.Log.d("WorkoutEngine", "Stopping workout")
         
-        // Emit a specific event for workout being abandoned
-        _events.value = WorkoutEvent.WorkoutFinished
+        // Cancel timer
+        timerJob?.cancel()
+        timerJob = null
+
+        // Cancel any pending alarms
+        timeoutHandler.removeCallbacksAndMessages(null)
+        
+        // Reset state completely
+        _state.value = WorkoutState()
+        
+        // Emit stop event
+        _events.value = WorkoutEvent.WorkoutStopped
     }
     
     /**
@@ -251,139 +251,185 @@ class WorkoutEngine(
     }
     
     /**
-     * Start the timer job
+     * Start the main workout timer
      */
     private fun startTimer() {
         // Cancel any existing timer
-        timerJob?.cancel()
+        stopTimer()
         
-        // Set the current time as the starting point for tracking elapsed time
-        lastTickTime = SystemClock.elapsedRealtime()
+        android.util.Log.d("WorkoutEngine", "Starting workout timer")
+        
+        // Capture start time for accurate timing
+        if (lastTickTime == 0L) {
+            lastTickTime = SystemClock.elapsedRealtime()
+        }
         
         // Start a new coroutine for timer updates
         timerJob = coroutineScope.launch {
-            while (isActive) {
+            while (coroutineScope.isActive && _state.value.isActive) {
                 // Update timer state
                 updateTimer()
                 
-                // Wait a short interval before next update
+                // Wait for next tick
                 delay(TIMER_UPDATE_INTERVAL_MS)
             }
         }
     }
     
     /**
-     * Stop the timer job
+     * Stop the timer
      */
     private fun stopTimer() {
+        android.util.Log.d("WorkoutEngine", "Stopping timer")
         timerJob?.cancel()
         timerJob = null
     }
     
     /**
-     * Update the timer state
+     * Update the timer state based on elapsed time
      */
     private fun updateTimer() {
-        val currentTime = SystemClock.elapsedRealtime()
+        if (!_state.value.isActive || _state.value.isPaused) {
+            return
+        }
         
-        // Calculate elapsed time in seconds (using double for precision)
-        val elapsedSeconds = (currentTime - lastTickTime) / 1000.0
+        val currentSegmentIndex = _state.value.currentSegmentIndex
+        if (currentSegmentIndex >= segments.size) {
+            // No more segments, workout is complete
+            completeWorkout()
+            return
+        }
         
-        // Update the last tick time for the next calculation
-        lastTickTime = currentTime
+        // Calculate elapsed time since last tick
+        val now = SystemClock.elapsedRealtime()
+        val elapsedMillis = if (lastTickTime > 0) now - lastTickTime else 0
+        lastTickTime = now
         
-        // Skip updates if no time has passed
-        if (elapsedSeconds <= 0) return
+        // Convert to seconds, ensuring we don't count less than a full second
+        val elapsedSeconds = (elapsedMillis / 1000).toInt()
+        if (elapsedSeconds <= 0) return // Skip if less than a second has passed
         
-        val currentState = _state.value
-        if (!currentState.isActive || currentState.isPaused) return
+        // Get current segment
+        val currentSegment = segments[currentSegmentIndex]
+        var remainingSeconds = _state.value.remainingTimeSeconds - elapsedSeconds
+        val totalElapsed = _state.value.elapsedTimeSeconds + elapsedSeconds
         
-        val currentSegment = currentState.currentSegment ?: return
-        
-        // Update remaining time (coerce to minimum of 0)
-        val remainingTime = (currentState.remainingTimeSeconds - elapsedSeconds).coerceAtLeast(0.0)
-        
-        // Update elapsed time for the whole workout
-        val elapsedTimeTotal = currentState.elapsedTimeSeconds + elapsedSeconds.toInt()
-        
-        // Update state with new values
-        _state.value = currentState.copy(
-            remainingTimeSeconds = remainingTime.toInt(),
-            elapsedTimeSeconds = elapsedTimeTotal
-        )
-        
-        // Emit timer tick event
-        _events.value = WorkoutEvent.TimerTick(
-            currentSegment = currentSegment,
-            remainingTimeSeconds = remainingTime.toInt(),
-            elapsedTimeSeconds = elapsedTimeTotal,
-            totalTimeSeconds = currentState.totalTimeSeconds
-        )
-        
-        // Check if segment completed
-        if (remainingTime <= 0) {
-            // Move to next segment
-            val nextSegmentIndex = currentState.currentSegmentIndex + 1
+        if (remainingSeconds <= 0) {
+            // Current segment completed
+            segmentsCompleted = true
             
+            // Emit segment completed event
+            emitSegmentCompleted(currentSegment)
+            
+            // Move to next segment if available
+            val nextSegmentIndex = currentSegmentIndex + 1
             if (nextSegmentIndex < segments.size) {
+                // Start next segment
                 val nextSegment = segments[nextSegmentIndex]
                 
-                // Update state
-                _state.value = currentState.copy(
+                // Update state with next segment
+                _state.value = _state.value.copy(
                     currentSegmentIndex = nextSegmentIndex,
                     currentSegment = nextSegment,
-                    remainingTimeSeconds = nextSegment.durationSeconds
+                    remainingTimeSeconds = nextSegment.durationSeconds,
+                    elapsedTimeSeconds = totalElapsed
                 )
                 
-                // Track that a segment was completed
-                segmentsCompleted = true
-                
-                // Emit events
-                _events.value = WorkoutEvent.SegmentCompleted(currentSegment)
+                // Emit segment started event
                 emitSegmentStarted(nextSegment)
             } else {
-                // This was the last segment, finish workout
-                coroutineScope.launch {
-                    finishWorkout()
-                }
+                // All segments completed, finish workout
+                completeWorkout()
             }
+        } else {
+            // Update remaining time for current segment
+            _state.value = _state.value.copy(
+                remainingTimeSeconds = remainingSeconds,
+                elapsedTimeSeconds = totalElapsed
+            )
+            
+            // Emit time updated event
+            _events.value = WorkoutEvent.TimeUpdated(remainingSeconds)
         }
     }
     
     /**
-     * Emit segment started event and trigger vibration
+     * Emit a segment started event and vibrate based on activity type
      */
     private fun emitSegmentStarted(segment: WorkoutSegment) {
-        // Different vibration patterns based on activity type
-        val vibrationEffect = when (segment.activityType) {
-            ActivityType.RUN -> {
-                // Double vibration for RUN
-                VibrationEffect.createWaveform(
-                    longArrayOf(0, 250, 100, 250),  // timing (0ms delay, 250ms vibrate, 100ms pause, 250ms vibrate)
-                    intArrayOf(0, 255, 0, 255),     // amplitudes
-                    -1                              // don't repeat
-                )
-            }
-            else -> {
-                // Single vibration for WALK (including WARMUP and COOLDOWN)
-                VibrationEffect.createOneShot(
-                    400,  // 400ms vibration
-                    VibrationEffect.DEFAULT_AMPLITUDE
-                )
-            }
-        }
-        
-        // Vibrate
-        vibrator.vibrate(vibrationEffect)
-        
-        // Update state to indicate we're actually running segments
-        _state.value = _state.value.copy(hasStartedSegments = true)
-        
-        // Emit event
+        // Emit segment started event with required parameters
         _events.value = WorkoutEvent.SegmentStarted(
             segment = segment,
             remainingTimeSeconds = segment.durationSeconds,
             totalSegments = segments.size
         )
+        
+        // Vibrate based on activity type
+        when (segment.activityType) {
+            ActivityType.WARMUP, ActivityType.COOLDOWN -> {
+                // Single vibration for warm-up or cool-down
+                val vibrationEffect = VibrationEffect.createOneShot(
+                    VIBRATION_DURATION_MS,
+                    VibrationEffect.DEFAULT_AMPLITUDE
+                )
+                vibrator.vibrate(vibrationEffect)
+            }
+            ActivityType.RUN -> {
+                // Double vibration for run
+                val timings = longArrayOf(0, VIBRATION_DURATION_MS, 300, VIBRATION_DURATION_MS)
+                val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
+                val vibrationEffect = VibrationEffect.createWaveform(timings, amplitudes, -1)
+                vibrator.vibrate(vibrationEffect)
+            }
+            ActivityType.WALK -> {
+                // Soft single vibration for walk
+                val vibrationEffect = VibrationEffect.createOneShot(
+                    VIBRATION_DURATION_MS,
+                    VibrationEffect.DEFAULT_AMPLITUDE / 2
+                )
+                vibrator.vibrate(vibrationEffect)
+            }
+        }
     }
+    
+    /**
+     * Emit a segment completed event
+     */
+    private fun emitSegmentCompleted(segment: WorkoutSegment) {
+        _events.value = WorkoutEvent.SegmentCompleted(segment)
+    }
+    
+    /**
+     * Complete the entire workout
+     */
+    private fun completeWorkout() {
+        stopTimer()
+        
+        // Create completed state
+        _state.value = _state.value.copy(
+            isActive = false,
+            isPaused = false,
+            remainingTimeSeconds = 0
+        )
+        
+        // Emit completion event
+        _events.value = WorkoutEvent.WorkoutFinished
+        
+        // If segments were completed, also emit success event
+        if (segmentsCompleted) {
+            _events.value = WorkoutEvent.WorkoutCompletedWithSuccess(
+                week = _state.value.currentWeek,
+                day = _state.value.currentDay
+            )
+        }
+        
+        // Long vibration to indicate workout completed
+        val vibrationEffect = VibrationEffect.createOneShot(
+            1000, // 1 second vibration
+            VibrationEffect.DEFAULT_AMPLITUDE
+        )
+        vibrator.vibrate(vibrationEffect)
+    }
+
+    private val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
 } 

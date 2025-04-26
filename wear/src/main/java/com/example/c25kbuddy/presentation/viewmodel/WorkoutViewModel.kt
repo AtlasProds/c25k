@@ -24,11 +24,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class WorkoutViewModel(
     application: Application,
@@ -155,54 +157,57 @@ class WorkoutViewModel(
      * Collect state and events from the service
      */
     private fun collectServiceState() {
-        val engine = workoutEngine ?: return
-        android.util.Log.d("WorkoutViewModel", "Starting to collect service state")
-        
         viewModelScope.launch {
-            engine.state.collect { state ->
-                android.util.Log.d("WorkoutViewModel", "Received state update: remaining=${state.remainingTimeSeconds}, active=${state.isActive}")
-                _workoutState.value = state
+            try {
+                workoutEngine?.state
+                    ?.catch { e ->
+                        android.util.Log.e("WorkoutViewModel", "Error while collecting workout state", e)
+                    }
+                    ?.collect { state ->
+                        android.util.Log.d("WorkoutViewModel", "Received state update: remaining=${state.remainingTimeSeconds}, active=${state.isActive}, segment=${state.currentSegment?.activityType}")
+                        
+                        // Copy the entire state directly instead of selectively updating properties
+                        _workoutState.value = state
+                        
+                        // Log updated state after applying change
+                        android.util.Log.d("WorkoutViewModel", "Updated _workoutState: active=${_workoutState.value.isActive}, remaining=${_workoutState.value.remainingTimeSeconds}")
+                        
+                        // Also update the UI state
+                        _uiState.update { 
+                            it.copy(
+                                isWorkoutActive = state.isActive,
+                                isWorkoutPaused = state.isPaused,
+                                currentWeek = state.currentWeek,
+                                currentDay = state.currentDay
+                            )
+                        }
+                        
+                        // Log the UI state after updating
+                        android.util.Log.d("WorkoutViewModel", "Updated _uiState: isWorkoutActive=${_uiState.value.isWorkoutActive}")
+                    }
                 
-                // Update UI state immediately when workout active state changes
-                _uiState.update { it.copy(
-                    isWorkoutActive = state.isActive,
-                    isWorkoutPaused = state.isPaused,
-                    currentWeek = state.currentWeek,
-                    currentDay = state.currentDay
-                )}
-            }
-        }
-        
-        viewModelScope.launch {
-            engine.events.collect { event ->
-                if (event != null) {
-                    android.util.Log.d("WorkoutViewModel", "Received event: ${event::class.simpleName}")
-                    _lastEvent.value = event
-                    
-                    // Handle specific events
-                    when (event) {
-                        is WorkoutEvent.WorkoutError -> {
-                            // Update the UI state with the error message
-                            _uiState.update { it.copy(
-                                errorMessage = event.errorMessage,
-                                permissionError = true
-                            )}
-                            android.util.Log.e("WorkoutViewModel", "Workout error: ${event.errorMessage}")
-                        }
+                // Also collect events
+                workoutEngine?.events
+                    ?.catch { e ->
+                        android.util.Log.e("WorkoutViewModel", "Error while collecting workout events", e)
+                    }
+                    ?.collect { event ->
+                        android.util.Log.d("WorkoutViewModel", "Received workout event: $event")
+                        _lastEvent.value = event
                         
-                        is WorkoutEvent.WorkoutFinished -> {
-                            // Ensure the UI state reflects that the workout is no longer active
-                            _uiState.update { it.copy(
-                                isWorkoutActive = false,
-                                isWorkoutPaused = false
-                            )}
-                        }
-                        
-                        else -> {
-                            // No additional handling for other event types
+                        // Handle specific events
+                        when (event) {
+                            is WorkoutEvent.WorkoutStarted -> {
+                                android.util.Log.d("WorkoutViewModel", "Received WorkoutStarted event")
+                                // Ensure UI state is correctly set
+                                _uiState.update { it.copy(isWorkoutActive = true) }
+                            }
+                            // No specific handling needed for other events yet
+                            else -> {}
                         }
                     }
-                }
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutViewModel", "Error in collectServiceState", e)
             }
         }
     }
@@ -222,10 +227,21 @@ class WorkoutViewModel(
     }
     
     /**
+     * Clear the last event to prevent old events from affecting new workout sessions
+     */
+    private fun clearLastEvent() {
+        _lastEvent.value = null
+        android.util.Log.d("WorkoutViewModel", "Last event cleared")
+    }
+    
+    /**
      * Start a workout for the specified week and day
      */
     fun startWorkout(week: Int, day: Int) {
         val context = getApplication<Application>()
+        
+        // Clear any previous events to prevent issues with old events
+        _lastEvent.value = null
         
         // Clear any previous error state
         _uiState.update { it.copy(
@@ -333,6 +349,9 @@ class WorkoutViewModel(
         
         android.util.Log.d("WorkoutViewModel", "Starting next workout: Week $nextWeek Day $nextDay")
         
+        // Clear any previous event state
+        clearLastEvent()
+        
         // Clear any previous error state
         _uiState.update { it.copy(
             permissionError = false,
@@ -420,11 +439,45 @@ class WorkoutViewModel(
      * Stop the current workout
      */
     fun stopWorkout() {
-        val context = getApplication<Application>()
-        val intent = Intent(context, WorkoutService::class.java).apply {
-            action = WorkoutService.ACTION_STOP_WORKOUT
+        viewModelScope.launch {
+            try {
+                // Check if service is running and bound
+                if (bound) {
+                    // Call the service to stop the workout
+                    service?.stopWorkout()
+                    
+                    // Wait a moment for the service to process the stop command
+                    delay(300)
+                    
+                    // Update local state
+                    _workoutState.value = _workoutState.value.copy(isActive = false, isPaused = false)
+                    
+                    // Unbind and potentially stop the service
+                    unbindService()
+                } else {
+                    android.util.Log.e("WorkoutViewModel", "Cannot stop workout: Service not bound")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutViewModel", "Error stopping workout", e)
+            }
         }
-        context.startService(intent)
+    }
+    
+    /**
+     * Unbinds from the workout service
+     */
+    private fun unbindService() {
+        if (bound) {
+            try {
+                getApplication<Application>().unbindService(serviceConnection)
+                bound = false
+                service = null
+                workoutEngine = null
+                android.util.Log.d("WorkoutViewModel", "Successfully unbound from service")
+            } catch (e: Exception) {
+                android.util.Log.e("WorkoutViewModel", "Error unbinding from service", e)
+            }
+        }
     }
     
     /**

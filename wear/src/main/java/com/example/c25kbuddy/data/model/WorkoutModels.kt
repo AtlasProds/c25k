@@ -149,6 +149,15 @@ sealed class WorkoutEvent {
     
     data object WorkoutFinished : WorkoutEvent()
     
+    // Event when workout first starts
+    data object WorkoutStarted : WorkoutEvent()
+    
+    // Event when workout is explicitly stopped
+    data object WorkoutStopped : WorkoutEvent()
+    
+    // Event when workout is completed
+    data object WorkoutCompleted : WorkoutEvent()
+    
     // New event specifically for showing completion success screen
     data class WorkoutCompletedWithSuccess(
         val week: Int,
@@ -161,6 +170,9 @@ sealed class WorkoutEvent {
         val elapsedTimeSeconds: Int,
         val totalTimeSeconds: Int
     ) : WorkoutEvent()
+    
+    // Basic time update event
+    data class TimeUpdated(val remainingTimeSeconds: Int) : WorkoutEvent()
     
     data class WorkoutPaused(val remainingTimeSeconds: Int) : WorkoutEvent()
     
