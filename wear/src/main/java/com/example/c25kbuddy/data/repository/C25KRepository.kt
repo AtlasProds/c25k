@@ -67,24 +67,33 @@ class C25KRepository(private val context: Context) {
     
     // Mark a workout as completed
     suspend fun markWorkoutCompleted(week: Int, day: Int) {
-        context.dataStore.edit { preferences ->
-            val progressJson = preferences[USER_PROGRESS_KEY]
-            val progress = if (progressJson != null) {
-                try {
-                    json.decodeFromString<UserProgress>(progressJson)
-                } catch (e: Exception) {
+        try {
+            android.util.Log.d("WorkoutEngine", "Finished workout for week=$week day=$day")
+            context.dataStore.edit { preferences ->
+                val progressJson = preferences[USER_PROGRESS_KEY]
+                val progress = if (progressJson != null) {
+                    try {
+                        json.decodeFromString<UserProgress>(progressJson)
+                    } catch (e: Exception) {
+                        android.util.Log.e("WorkoutEngine", "Failed to decode progress JSON, resetting to default", e)
+                        UserProgress()
+                    }
+                } else {
                     UserProgress()
                 }
-            } else {
-                UserProgress()
+
+                progress.markWorkoutCompleted(week, day)
+                preferences[USER_PROGRESS_KEY] = json.encodeToString(progress)
             }
-            
-            progress.markWorkoutCompleted(week, day)
-            
-            preferences[USER_PROGRESS_KEY] = json.encodeToString(progress)
+        } catch (e: Exception) {
+            android.util.Log.e(
+                "C25KRepository",
+                "Error marking workout completed (week=$week, day=$day)",
+                e
+            )
         }
     }
-    
+
     // Convert day segments to workout segments with activity types
     fun createWorkoutSegments(day: Day): List<WorkoutSegment> {
         // Get the actual segments, either from the day directly or from cache if it's a reference

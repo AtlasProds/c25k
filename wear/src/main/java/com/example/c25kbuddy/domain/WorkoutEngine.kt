@@ -245,7 +245,7 @@ class WorkoutEngine(
      */
     suspend fun finishWorkout() {
         stopTimer()
-        
+        android.util.Log.d("WorkoutEngine", "Finished workout")
         // Save progress
         repository.markWorkoutCompleted(_state.value.currentWeek, _state.value.currentDay)
         
@@ -400,7 +400,15 @@ class WorkoutEngine(
      */
     private fun completeWorkout() {
         stopTimer()
-        
+
+        // Persist workout completion
+        coroutineScope.launch {
+            repository.markWorkoutCompleted(
+                week = _state.value.currentWeek,
+                day  = _state.value.currentDay
+            )
+        }
+
         // Create completed state
         _state.value = _state.value.copy(
             isActive = false,
