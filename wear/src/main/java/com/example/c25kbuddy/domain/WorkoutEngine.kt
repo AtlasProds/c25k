@@ -75,16 +75,18 @@ class WorkoutEngine(
             return false
         }
         
-        // Initialize state
+        // Initialize state - explicitly set isPreparing to true before countdown
         _state.value = _state.value.copy(
             isActive = true,
             isPaused = false,
+            isPreparing = true,
+            countdownSeconds = 5,
             currentWeek = week,
             currentDay = day,
             totalSegments = segments.size
         )
         
-        android.util.Log.d("WorkoutEngine", "Initialized workout state: active=${_state.value.isActive}")
+        android.util.Log.d("WorkoutEngine", "Initialized workout state: active=${_state.value.isActive}, preparing=${_state.value.isPreparing}")
         
         // Start countdown timer
         android.util.Log.d("WorkoutEngine", "Starting countdown timer")
@@ -113,6 +115,12 @@ class WorkoutEngine(
         timerJob = coroutineScope.launch {
             // Start countdown
             for (i in countdownFrom downTo 1) {
+                // Update the state with the current countdown second
+                _state.value = _state.value.copy(
+                    isPreparing = true,
+                    countdownSeconds = i
+                )
+                
                 // Emit countdown tick event
                 _events.value = WorkoutEvent.CountdownTick(i)
                 android.util.Log.d("WorkoutEngine", "Countdown tick: $i")
@@ -129,6 +137,12 @@ class WorkoutEngine(
                     VibrationEffect.DEFAULT_AMPLITUDE
                 )
                 vibrator.vibrate(vibrationEffect)
+                
+                // Update the state to indicate countdown is finished
+                _state.value = _state.value.copy(
+                    isPreparing = false,
+                    countdownSeconds = 0
+                )
                 
                 // Emit countdown finished event
                 _events.value = WorkoutEvent.CountdownFinished

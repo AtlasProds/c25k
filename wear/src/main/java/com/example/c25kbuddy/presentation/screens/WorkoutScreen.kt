@@ -122,42 +122,34 @@ fun WorkoutScreen(
     }
     
     // Monitor if workout is active and navigate back if not
-    LaunchedEffect(workoutState.isActive) {
-        android.util.Log.d("WorkoutScreen", "Detected change in workout active state: ${workoutState.isActive}")
+    LaunchedEffect(workoutState.isActive, workoutState.isPreparing, workoutState.countdownSeconds) {
+        android.util.Log.d("WorkoutScreen", "State changed: active=${workoutState.isActive}, preparing=${workoutState.isPreparing}, countdown=${workoutState.countdownSeconds}")
         
-        // If workout is active, no need to do anything
-        if (workoutState.isActive) {
-            android.util.Log.d("WorkoutScreen", "Workout is active, no need to navigate back")
+        // If workout is active or in countdown state, stay on screen
+        if (workoutState.isActive || workoutState.isPreparing || workoutState.countdownSeconds > 0) {
+            android.util.Log.d("WorkoutScreen", "Workout is active or in countdown, staying on screen")
             return@LaunchedEffect
         }
         
-        // If we get here, workout is not active
-        // Wait a bit longer in case state is still being initialized
-        delay(1000)
+        // If we reach here, workout is not active and not in preparation phase
+        // Give a short grace period to allow state to update
+        delay(500)
         
-        // Check if workout became active 
-        if (viewModel.workoutState.value.isActive) {
-            android.util.Log.d("WorkoutScreen", "Workout became active after wait, staying on screen")
+        // Re-check state after delay
+        if (viewModel.workoutState.value.isActive || 
+            viewModel.workoutState.value.isPreparing || 
+            viewModel.workoutState.value.countdownSeconds > 0) {
+            android.util.Log.d("WorkoutScreen", "State became active/preparing after delay, staying on screen")
             return@LaunchedEffect
         }
         
-        // Check if we're just starting up - don't navigate away immediately
-        if (workoutState.isPreparing) {
-            android.util.Log.d("WorkoutScreen", "Workout is in preparing state, giving more time")
-            delay(2000)
-            
-            if (viewModel.workoutState.value.isActive) {
-                android.util.Log.d("WorkoutScreen", "Workout became active after preparing wait, staying on screen")
-                return@LaunchedEffect
-            }
-        }
-        
-        // Check if there's an active workout event that might restart the workout
+        // Check if we just received a start event
         if (lastEvent is WorkoutEvent.WorkoutStarted) {
             android.util.Log.d("WorkoutScreen", "Found WorkoutStarted event, waiting longer")
-            delay(2000)
+            delay(1000)
             
-            if (viewModel.workoutState.value.isActive) {
+            if (viewModel.workoutState.value.isActive || 
+                viewModel.workoutState.value.isPreparing) {
                 android.util.Log.d("WorkoutScreen", "Workout became active after event check, staying on screen")
                 return@LaunchedEffect
             }
