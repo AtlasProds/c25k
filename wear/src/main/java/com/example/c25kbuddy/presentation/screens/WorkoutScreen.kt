@@ -67,6 +67,9 @@ import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.random.Random
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 @Composable
 fun WorkoutScreen(
@@ -79,6 +82,9 @@ fun WorkoutScreen(
     // Track whether the control panel is showing (via left swipe)
     var controlPanelOffset by remember { mutableStateOf(1000f) } // Start offscreen
     val controlPanelVisible = controlPanelOffset < 500f
+    
+    // Track whether to show the controls screen
+    var showControlsScreen by remember { mutableStateOf(false) }
     
     // When any WorkoutFinished event is received, navigate back immediately
     LaunchedEffect(lastEvent) {
@@ -249,49 +255,9 @@ fun WorkoutScreen(
         }
     }
     
-    // Main workout screen with drag gesture support
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colors.background)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        // If drag ended and panel is more than halfway visible, keep it open
-                        // otherwise close it
-                        controlPanelOffset = if (controlPanelOffset < 500f) 0f else 1000f
-                    },
-                    onDragStart = { },
-                    onDragCancel = { },
-                    onHorizontalDrag = { change, dragAmount ->
-                        change.consume()
-                        // Positive drag amount means swiping right (opening panel)
-                        // Negative drag amount means swiping left (closing panel)
-                        controlPanelOffset = (controlPanelOffset - dragAmount).coerceIn(0f, 1000f)
-                    }
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        // Always show the time at the top
-        TimeText(modifier = Modifier.align(Alignment.TopCenter))
-        
-        // Show countdown if in preparing state
-        if (workoutState.isPreparing) {
-            CountdownScreen(countdownSeconds = workoutState.countdownSeconds)
-        } 
-        // Show main workout UI
-        else {
-            WorkoutMainScreen(
-                workoutState = workoutState,
-                viewModel = viewModel,
-                onShowStopConfirmation = { showStopConfirmation = true },
-                onShowExitConfirmation = { showExitConfirmation = true }
-            )
-        }
-        
-        // Control panel overlay (slides in from right)
-        ControlPanel(
+    // Show either the controls screen or the main workout screen
+    if (showControlsScreen) {
+        WorkoutControlsScreen(
             isPaused = workoutState.isPaused,
             onPauseResume = {
                 if (workoutState.isPaused) {
@@ -299,18 +265,90 @@ fun WorkoutScreen(
                 } else {
                     viewModel.pauseWorkout()
                 }
-                controlPanelOffset = 1000f // Close the panel
+                showControlsScreen = false
             },
-            onShowExitConfirmation = {
-                showExitConfirmation = true
-                controlPanelOffset = 1000f // Close the panel
-            },
-            onShowCompleteConfirmation = {
+            onStop = {
                 showStopConfirmation = true
-                controlPanelOffset = 1000f // Close the panel
+                showControlsScreen = false
             },
-            offset = controlPanelOffset.roundToInt()
+            onRestart = {
+                // Skip to first segment
+                if (workoutState.currentSegmentIndex > 0) {
+                    // For now we're just restarting the current workout
+                    viewModel.stopWorkout()
+                    viewModel.startWorkout(workoutState.currentWeek, workoutState.currentDay)
+                }
+                showControlsScreen = false
+            },
+            onBack = {
+                showControlsScreen = false
+            }
         )
+    } else {
+        // Main workout screen with drag gesture support
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colors.background)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = {
+                            // If drag ended and panel is more than halfway visible, keep it open
+                            // otherwise close it
+                            controlPanelOffset = if (controlPanelOffset < 500f) 0f else 1000f
+                        },
+                        onDragStart = { },
+                        onDragCancel = { },
+                        onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            // Positive drag amount means swiping right (opening panel)
+                            // Negative drag amount means swiping left (closing panel)
+                            controlPanelOffset = (controlPanelOffset - dragAmount).coerceIn(0f, 1000f)
+                        }
+                    )
+                },
+            contentAlignment = Alignment.Center
+        ) {
+            // Always show the time at the top
+            TimeText(modifier = Modifier.align(Alignment.TopCenter))
+            
+            // Show countdown if in preparing state
+            if (workoutState.isPreparing) {
+                CountdownScreen(countdownSeconds = workoutState.countdownSeconds)
+            } 
+            // Show main workout UI
+            else {
+                WorkoutMainScreen(
+                    workoutState = workoutState,
+                    viewModel = viewModel,
+                    onShowStopConfirmation = { showStopConfirmation = true },
+                    onShowExitConfirmation = { showExitConfirmation = true },
+                    onShowControls = { showControlsScreen = true }
+                )
+            }
+            
+            // Control panel overlay (slides in from right)
+            ControlPanel(
+                isPaused = workoutState.isPaused,
+                onPauseResume = {
+                    if (workoutState.isPaused) {
+                        viewModel.resumeWorkout()
+                    } else {
+                        viewModel.pauseWorkout()
+                    }
+                    controlPanelOffset = 1000f // Close the panel
+                },
+                onShowExitConfirmation = {
+                    showExitConfirmation = true
+                    controlPanelOffset = 1000f // Close the panel
+                },
+                onShowCompleteConfirmation = {
+                    showStopConfirmation = true
+                    controlPanelOffset = 1000f // Close the panel
+                },
+                offset = controlPanelOffset.roundToInt()
+            )
+        }
     }
 }
 
@@ -471,7 +509,8 @@ fun WorkoutMainScreen(
     workoutState: WorkoutState,
     viewModel: WorkoutViewModel,
     onShowStopConfirmation: () -> Unit,
-    onShowExitConfirmation: () -> Unit
+    onShowExitConfirmation: () -> Unit,
+    onShowControls: () -> Unit  // New parameter for navigation to controls
 ) {
     val segment = workoutState.currentSegment ?: return
     
@@ -512,7 +551,14 @@ fun WorkoutMainScreen(
                 .padding(vertical = 8.dp)
                 .size(130.dp)
                 .clip(CircleShape)
-                .background(getColorForActivityType(segment.activityType).copy(alpha = 0.2f)),
+                .background(getColorForActivityType(segment.activityType).copy(alpha = 0.2f))
+                // Make the entire timer area clickable to navigate to controls screen
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null // No visual indication on click
+                ) {
+                    onShowControls()
+                },
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -587,5 +633,119 @@ fun WorkoutMainScreen(
                 textAlign = TextAlign.Center
             )
         }
+    }
+}
+
+@Composable
+fun WorkoutControlsScreen(
+    isPaused: Boolean,
+    onPauseResume: () -> Unit,
+    onStop: () -> Unit,
+    onRestart: () -> Unit,
+    onBack: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colors.background),
+        contentAlignment = Alignment.Center
+    ) {
+        // Always show the time at the top
+        TimeText(modifier = Modifier.align(Alignment.TopCenter))
+        
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // 2x2 Grid of controls
+            // First row: Stop and Pause/Resume
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // Stop Button
+                ControlButton(
+                    onClick = onStop,
+                    emoji = "🛑",
+                    label = "Stop",
+                    backgroundColor = Color.Red.copy(alpha = 0.8f)
+                )
+                
+                // Pause/Resume Button
+                ControlButton(
+                    onClick = onPauseResume,
+                    emoji = if (isPaused) "▶️" else "⏸️",
+                    label = if (isPaused) "Resume" else "Pause",
+                    backgroundColor = if (isPaused) 
+                        Color.Green.copy(alpha = 0.8f) 
+                    else Color.Yellow.copy(alpha = 0.8f)
+                )
+            }
+            
+            // Second row: Restart and Back
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                // Restart Button
+                ControlButton(
+                    onClick = onRestart,
+                    emoji = "🔄",
+                    label = "Restart",
+                    backgroundColor = Color.Blue.copy(alpha = 0.8f)
+                )
+                
+                // Back Button
+                ControlButton(
+                    onClick = onBack,
+                    emoji = "⬅️",
+                    label = "Back",
+                    backgroundColor = Color.Gray.copy(alpha = 0.8f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ControlButton(
+    onClick: () -> Unit,
+    emoji: String,
+    label: String,
+    backgroundColor: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(backgroundColor)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = emoji,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(4.dp))
+        
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            color = MaterialTheme.colors.onSurface,
+            textAlign = TextAlign.Center,
+            fontWeight = FontWeight.Medium
+        )
     }
 } 
