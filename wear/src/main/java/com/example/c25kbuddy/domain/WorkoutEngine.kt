@@ -370,8 +370,8 @@ class WorkoutEngine(
         
         // Vibrate based on activity type
         when (segment.activityType) {
-            ActivityType.WARMUP, ActivityType.COOLDOWN -> {
-                // Single vibration for warm-up or cool-down
+            ActivityType.WARMUP, ActivityType.COOLDOWN, ActivityType.WALK -> {
+                // Single vibration for warm-up, cool-down or walk
                 val vibrationEffect = VibrationEffect.createOneShot(
                     VIBRATION_DURATION_MS,
                     VibrationEffect.DEFAULT_AMPLITUDE
@@ -383,14 +383,6 @@ class WorkoutEngine(
                 val timings = longArrayOf(0, VIBRATION_DURATION_MS, 300, VIBRATION_DURATION_MS)
                 val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
                 val vibrationEffect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator.vibrate(vibrationEffect)
-            }
-            ActivityType.WALK -> {
-                // Soft single vibration for walk
-                val vibrationEffect = VibrationEffect.createOneShot(
-                    VIBRATION_DURATION_MS,
-                    VibrationEffect.DEFAULT_AMPLITUDE / 2
-                )
                 vibrator.vibrate(vibrationEffect)
             }
         }
