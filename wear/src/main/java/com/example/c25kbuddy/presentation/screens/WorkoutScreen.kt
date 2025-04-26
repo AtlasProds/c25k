@@ -247,14 +247,15 @@ fun WorkoutScreen(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Text(
-                    text = "Exit Workout?",
+                    text = "Exit workout?",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
                 
                 Text(
-                    text = "This will exit without saving progress. You can resume this workout later.",
+                    text = "You can restart later.",
                     fontSize = 14.sp,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.padding(bottom = 20.dp)
@@ -270,11 +271,12 @@ fun WorkoutScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(44.dp)
                 ) {
                     Text(
-                        "Exit Without Saving",
-                        fontSize = 16.sp
+                        "Exit",
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
                 
@@ -289,11 +291,12 @@ fun WorkoutScreen(
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(48.dp)
+                        .height(44.dp)
                 ) {
                     Text(
                         "Cancel",
-                        fontSize = 16.sp
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
