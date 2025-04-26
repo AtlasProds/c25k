@@ -315,15 +315,6 @@ fun WorkoutScreen(
                 showStopConfirmation = true
                 showControlsScreen = false
             },
-            onRestart = {
-                // Skip to first segment
-                if (workoutState.currentSegmentIndex > 0) {
-                    // For now we're just restarting the current workout
-                    viewModel.stopWorkout()
-                    viewModel.startWorkout(workoutState.currentWeek, workoutState.currentDay)
-                }
-                showControlsScreen = false
-            },
             onBack = {
                 showControlsScreen = false
             }
@@ -686,7 +677,6 @@ fun WorkoutControlsScreen(
     onPauseResume: () -> Unit,
     onStop: () -> Unit,
     onComplete: () -> Unit,
-    onRestart: () -> Unit,
     onBack: () -> Unit
 ) {
     Box(
@@ -731,7 +721,7 @@ fun WorkoutControlsScreen(
                 )
             }
             
-            // Second row: Complete, Restart and Back
+            // Second row: Complete and Back
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
@@ -742,14 +732,6 @@ fun WorkoutControlsScreen(
                     emoji = "✅",
                     label = "Complete",
                     backgroundColor = Color.Green.copy(alpha = 0.8f)
-                )
-                
-                // Restart Button
-                ControlButton(
-                    onClick = onRestart,
-                    emoji = "🔄",
-                    label = "Restart",
-                    backgroundColor = Color.Blue.copy(alpha = 0.8f)
                 )
                 
                 // Back Button
