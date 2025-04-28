@@ -1,8 +1,22 @@
 # C25K Buddy - Wear OS App
 
-A Wear OS companion app for the Couch to 5K (C25K) running program. This app helps users track their progress through the C25K program directly from their smartwatch.
+A Wear OS companion app for the Couch to 5K (C25K) running program. This app helps users track their progress through the C25K program directly from their smartwatch. This app was only made as a weekend project for a Galaxy Watch 5.
 
 Couch To 5K plan is taken from this NHS PDF: https://digitalcampaignsstorage.blob.core.windows.net/campaigns-cms-prod/documents/c25k_printable_plan.pdf
+
+## Screenshots
+### Quick Start Next Workout
+<img width="459" alt="image" src="https://github.com/user-attachments/assets/3ffab5c0-b080-427a-8fe6-519ce2972839" />
+
+<img width="459" alt="image" src="https://github.com/user-attachments/assets/9a4f6be0-27d1-424f-a556-681f7f7598c4" />
+
+<img width="459" alt="image" src="https://github.com/user-attachments/assets/201a666f-27f3-4791-bbb3-8be6f146a200" />
+
+<img width="456" alt="image" src="https://github.com/user-attachments/assets/5b68340d-492d-49df-89ca-57fbae1ab09a" />
+
+<img width="456" alt="image" src="https://github.com/user-attachments/assets/4cc0d28b-82ce-4465-a020-a6fd4cbea9d3" />
+
+### 
 
 ## Prerequisites
 
