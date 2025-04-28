@@ -129,14 +129,6 @@ wear/build/outputs/apk/release/wear-release.apk
 - Real-time workout guidance with watch vibrations
 - Progress visualization during workout
 
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a Pull Request
-
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the LICENSE file for details. Feel free to do whatever you want with it.
