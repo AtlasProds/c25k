@@ -5,7 +5,6 @@ A Wear OS companion app for the Couch to 5K (C25K) running program. This app hel
 Couch To 5K plan is taken from this NHS PDF: https://digitalcampaignsstorage.blob.core.windows.net/campaigns-cms-prod/documents/c25k_printable_plan.pdf
 
 ## Screenshots
-### Quick Start Next Workout
 <img width="459" alt="image" src="https://github.com/user-attachments/assets/3ffab5c0-b080-427a-8fe6-519ce2972839" />
 
 <img width="459" alt="image" src="https://github.com/user-attachments/assets/9a4f6be0-27d1-424f-a556-681f7f7598c4" />
