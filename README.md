@@ -1,10 +1,16 @@
 # C25K Buddy - Wear OS App
 
-A Wear OS companion app for the Couch to 5K (C25K) running program. C25K switches between running and walking to help build up to a point where you can run a 5K. Your watch will vibrate once when you need to walk and twice when you need to run. This helps you do your run without carrying a phone or staring at a screen. You can also use this app to track your progess with the program locally (all data is stored in your watch only).
+A dead-simple Wear OS companion app for the Couch to 5K (C25K) running program. C25K switches between running and walking to help build up to a point where you can run a 5K. Your watch will vibrate once when you need to walk and twice when you need to run. This helps you do your run without carrying a phone or staring at a screen. You can also use this app to track your progess with the program locally (all data is stored in your watch only).
 
 This app was only made as a weekend project for a Galaxy Watch 5.
 
 Couch To 5K plan is taken from this NHS PDF: https://digitalcampaignsstorage.blob.core.windows.net/campaigns-cms-prod/documents/c25k_printable_plan.pdf
+
+### Key Features
+- C25K program schedule tracking
+- Workout progress persistence
+- Real-time workout guidance with watch vibrations
+- Progress visualization during workout
 
 ## Screenshots
 <img width="459" alt="image" src="https://github.com/user-attachments/assets/3ffab5c0-b080-427a-8fe6-519ce2972839" />
@@ -123,13 +129,6 @@ wear/build/outputs/apk/release/wear-release.apk
    - Ensure your watch has enough storage space
    - Try uninstalling any previous versions: `adb uninstall com.example.c25kbuddy`
    - Check that your watch is compatible (requires Wear OS 3.0 or later)
-
-### Key Features
-
-- C25K program schedule tracking
-- Workout progress persistence
-- Real-time workout guidance with watch vibrations
-- Progress visualization during workout
 
 ## License
 
