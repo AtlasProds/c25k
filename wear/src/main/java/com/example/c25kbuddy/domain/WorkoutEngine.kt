@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlin.math.abs
 
 /**
  * Core engine that manages the workout state, timer, and transitions
@@ -29,8 +30,11 @@ class WorkoutEngine(
     private val coroutineScope: CoroutineScope
 ) {
     companion object {
-        private const val TIMER_UPDATE_INTERVAL_MS = 1000L  // Update once per second
+        private const val TIMER_UPDATE_INTERVAL_MS = 100L  // Update every 100ms for smoother display
+        private const val COUNTDOWN_INTERVAL_MS = 1000L    // Countdown every second
         private const val VIBRATION_DURATION_MS = 600L
+        private const val TIMER_VERIFICATION_INTERVAL_MS = 5000L  // Verify timer every 5 seconds
+        private const val MAX_TIMER_DRIFT_SECONDS = 2  // Maximum allowed timer drift before correction
     }
     
     // C25K program data - load from repository synchronously to prevent timing issues
@@ -44,8 +48,23 @@ class WorkoutEngine(
     private val _events = MutableStateFlow<WorkoutEvent?>(null)
     val events: Flow<WorkoutEvent?> = _events
     
+    // Cached vibration effects
+    private val singleVibrationEffect = VibrationEffect.createOneShot(
+        VIBRATION_DURATION_MS,
+        VibrationEffect.DEFAULT_AMPLITUDE
+    )
+    private val doubleVibrationEffect = VibrationEffect.createWaveform(
+        longArrayOf(0, VIBRATION_DURATION_MS, 300, VIBRATION_DURATION_MS),
+        intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE),
+        -1
+    )
+    
     private var timerJob: Job? = null
-    private var lastTickTime = 0L
+    private var verificationJob: Job? = null
+    private var startTime = 0L
+    private var segmentStartTime = 0L
+    private var pausedTimeMillis = 0L
+    private var pausedTimeMillisStart = 0L
     
     private var segments: List<WorkoutSegment> = emptyList()
     
@@ -107,7 +126,9 @@ class WorkoutEngine(
         // Ensure any previous timer is canceled
         timerJob?.cancel()
         timerJob = null
-        lastTickTime = 0L
+        verificationJob?.cancel()
+        verificationJob = null
+        startTime = 0L
         
         // Reset countdown completed flag
         var countdownCompleted = false
@@ -124,7 +145,7 @@ class WorkoutEngine(
                 // Emit countdown tick event
                 _events.value = WorkoutEvent.CountdownTick(i)
                 android.util.Log.d("WorkoutEngine", "Countdown tick: $i")
-                delay(TIMER_UPDATE_INTERVAL_MS)
+                delay(COUNTDOWN_INTERVAL_MS)  // Use 1-second interval for countdown
             }
             
             // Prevent multiple completions
@@ -132,11 +153,7 @@ class WorkoutEngine(
                 countdownCompleted = true
                 
                 // Vibrate to indicate countdown complete
-                val vibrationEffect = VibrationEffect.createOneShot(
-                    VIBRATION_DURATION_MS,
-                    VibrationEffect.DEFAULT_AMPLITUDE
-                )
-                vibrator.vibrate(vibrationEffect)
+                vibrator.vibrate(singleVibrationEffect)
                 
                 // Update the state to indicate countdown is finished
                 _state.value = _state.value.copy(
@@ -173,6 +190,7 @@ class WorkoutEngine(
     fun pauseWorkout() {
         if (_state.value.isActive && !_state.value.isPaused) {
             stopTimer()
+            pausedTimeMillisStart = SystemClock.elapsedRealtime()
             _state.value = _state.value.copy(isPaused = true)
             _events.value = WorkoutEvent.WorkoutPaused(_state.value.remainingTimeSeconds)
         }
@@ -183,6 +201,8 @@ class WorkoutEngine(
      */
     fun resumeWorkout() {
         if (_state.value.isActive && _state.value.isPaused) {
+            val pauseDuration = SystemClock.elapsedRealtime() - pausedTimeMillisStart
+            pausedTimeMillis += pauseDuration  // Accumulate pause time
             _state.value = _state.value.copy(isPaused = false)
             startTimer()
             _events.value = WorkoutEvent.WorkoutResumed(_state.value.remainingTimeSeconds)
@@ -198,10 +218,9 @@ class WorkoutEngine(
         // Cancel timer
         timerJob?.cancel()
         timerJob = null
+        verificationJob?.cancel()
+        verificationJob = null
 
-        // Cancel any pending alarms
-        timeoutHandler.removeCallbacksAndMessages(null)
-        
         // Reset state completely
         _state.value = WorkoutState()
         
@@ -274,18 +293,28 @@ class WorkoutEngine(
         android.util.Log.d("WorkoutEngine", "Starting workout timer")
         
         // Capture start time for accurate timing
-        if (lastTickTime == 0L) {
-            lastTickTime = SystemClock.elapsedRealtime()
-        }
+        startTime = SystemClock.elapsedRealtime()
+        segmentStartTime = startTime
         
         // Start a new coroutine for timer updates
         timerJob = coroutineScope.launch {
             while (coroutineScope.isActive && _state.value.isActive) {
-                // Update timer state
-                updateTimer()
+                val currentTime = SystemClock.elapsedRealtime()
+                val segmentElapsed = ((currentTime - segmentStartTime - pausedTimeMillis) / 1000).toInt()
                 
-                // Wait for next tick
+                // Update timer state based on actual elapsed time
+                updateTimer(segmentElapsed)
+                
+                // Use a shorter delay for more frequent updates
                 delay(TIMER_UPDATE_INTERVAL_MS)
+            }
+        }
+        
+        // Start timer verification job
+        verificationJob = coroutineScope.launch {
+            while (coroutineScope.isActive && _state.value.isActive) {
+                verifyTimerState()
+                delay(TIMER_VERIFICATION_INTERVAL_MS)
             }
         }
     }
@@ -297,12 +326,30 @@ class WorkoutEngine(
         android.util.Log.d("WorkoutEngine", "Stopping timer")
         timerJob?.cancel()
         timerJob = null
+        verificationJob?.cancel()
+        verificationJob = null
+    }
+    
+    /**
+     * Verify timer state and correct any drift
+     */
+    private fun verifyTimerState() {
+        if (_state.value.isActive && !_state.value.isPaused) {
+            val expectedTotal = ((SystemClock.elapsedRealtime() - startTime) / 1000).toInt()
+            val actualTotal = _state.value.elapsedTimeSeconds
+
+            if (abs(expectedTotal - actualTotal) > MAX_TIMER_DRIFT_SECONDS) {
+                // Re-compute ONLY the current-segment drift
+                val currentSegmentElapsed = ((SystemClock.elapsedRealtime() - segmentStartTime - pausedTimeMillis) / 1000).toInt()
+                updateTimer(currentSegmentElapsed.coerceAtLeast(0))
+            }
+        }
     }
     
     /**
      * Update the timer state based on elapsed time
      */
-    private fun updateTimer() {
+    private fun updateTimer(segmentElapsed: Int) {
         if (!_state.value.isActive || _state.value.isPaused) {
             return
         }
@@ -314,9 +361,17 @@ class WorkoutEngine(
             return
         }
         
-        // Decrement remaining time by 1 each tick (simulated second)
-        var remainingSeconds = _state.value.remainingTimeSeconds - 1
-        val totalElapsed = _state.value.elapsedTimeSeconds + 1 // Increment total elapsed time by 1 simulated second
+        val segment = segments[currentSegmentIndex]
+        val remainingSeconds = segment.durationSeconds - segmentElapsed
+        
+        android.util.Log.d("WorkoutEngine", "Segment timer update: index=$currentSegmentIndex, elapsed=$segmentElapsed, remaining=$remainingSeconds")
+        
+        // Update total elapsed time every tick
+        val expectedTotal = ((SystemClock.elapsedRealtime() - startTime) / 1000).toInt()
+        _state.value = _state.value.copy(
+            remainingTimeSeconds = remainingSeconds,
+            elapsedTimeSeconds = expectedTotal
+        )
         
         if (remainingSeconds <= 0) {
             // Current segment completed
@@ -331,13 +386,18 @@ class WorkoutEngine(
                 // Start next segment
                 val nextSegment = segments[nextSegmentIndex]
                 
+                // Reset segment timer and pause time for new segment
+                segmentStartTime = SystemClock.elapsedRealtime()
+                pausedTimeMillis = 0L
+                
                 // Update state with next segment
                 _state.value = _state.value.copy(
                     currentSegmentIndex = nextSegmentIndex,
                     currentSegment = nextSegment,
-                    remainingTimeSeconds = nextSegment.durationSeconds,
-                    elapsedTimeSeconds = totalElapsed
+                    remainingTimeSeconds = nextSegment.durationSeconds
                 )
+                
+                android.util.Log.d("WorkoutEngine", "Starting next segment: index=$nextSegmentIndex, duration=${nextSegment.durationSeconds}")
                 
                 // Emit segment started event
                 emitSegmentStarted(nextSegment)
@@ -346,12 +406,6 @@ class WorkoutEngine(
                 completeWorkout()
             }
         } else {
-            // Update remaining time for current segment
-            _state.value = _state.value.copy(
-                remainingTimeSeconds = remainingSeconds,
-                elapsedTimeSeconds = totalElapsed
-            )
-            
             // Emit time updated event
             _events.value = WorkoutEvent.TimeUpdated(remainingSeconds)
         }
@@ -371,19 +425,10 @@ class WorkoutEngine(
         // Vibrate based on activity type
         when (segment.activityType) {
             ActivityType.WARMUP, ActivityType.COOLDOWN, ActivityType.WALK -> {
-                // Single vibration for warm-up, cool-down or walk
-                val vibrationEffect = VibrationEffect.createOneShot(
-                    VIBRATION_DURATION_MS,
-                    VibrationEffect.DEFAULT_AMPLITUDE
-                )
-                vibrator.vibrate(vibrationEffect)
+                vibrator.vibrate(singleVibrationEffect)
             }
             ActivityType.RUN -> {
-                // Double vibration for run
-                val timings = longArrayOf(0, VIBRATION_DURATION_MS, 300, VIBRATION_DURATION_MS)
-                val amplitudes = intArrayOf(0, VibrationEffect.DEFAULT_AMPLITUDE, 0, VibrationEffect.DEFAULT_AMPLITUDE)
-                val vibrationEffect = VibrationEffect.createWaveform(timings, amplitudes, -1)
-                vibrator.vibrate(vibrationEffect)
+                vibrator.vibrate(doubleVibrationEffect)
             }
         }
     }
@@ -434,6 +479,4 @@ class WorkoutEngine(
         )
         vibrator.vibrate(vibrationEffect)
     }
-
-    private val timeoutHandler = android.os.Handler(android.os.Looper.getMainLooper())
 } 

@@ -82,8 +82,20 @@ class C25KRepository(private val context: Context) {
                     UserProgress()
                 }
 
-                progress.markWorkoutCompleted(week, day)
-                preferences[USER_PROGRESS_KEY] = json.encodeToString(progress)
+                // Ensure we have a valid progress object before marking completion
+                val updatedProgress = progress.copy().apply {
+                    markWorkoutCompleted(week, day)
+                }
+                
+                try {
+                    preferences[USER_PROGRESS_KEY] = json.encodeToString(updatedProgress)
+                } catch (e: Exception) {
+                    android.util.Log.e("C25KRepository", "Failed to save updated progress", e)
+                    // Try to save at least the week/day completion
+                    preferences[USER_PROGRESS_KEY] = json.encodeToString(UserProgress().apply {
+                        markWorkoutCompleted(week, day)
+                    })
+                }
             }
         } catch (e: Exception) {
             android.util.Log.e(
@@ -91,6 +103,16 @@ class C25KRepository(private val context: Context) {
                 "Error marking workout completed (week=$week, day=$day)",
                 e
             )
+            // Try one last time with a fresh progress object
+            try {
+                context.dataStore.edit { preferences ->
+                    preferences[USER_PROGRESS_KEY] = json.encodeToString(UserProgress().apply {
+                        markWorkoutCompleted(week, day)
+                    })
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("C25KRepository", "Failed to save workout completion after all retries", e)
+            }
         }
     }
 
@@ -144,5 +166,10 @@ class C25KRepository(private val context: Context) {
                 day.position = index
             }
         }
+    }
+
+    // Clear the segment cache
+    fun clearCache() {
+        segmentCache.clear()
     }
 } 

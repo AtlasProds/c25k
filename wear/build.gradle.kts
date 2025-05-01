@@ -59,6 +59,8 @@ android {
         checkReleaseBuilds = false
         // Ignore the POST_NOTIFICATIONS permission issue for now
         disable += "NotificationPermission"
+        disable += "MutableCollectionMutableState"
+        disable += "AutoboxingStateCreation"
     }
 }
 

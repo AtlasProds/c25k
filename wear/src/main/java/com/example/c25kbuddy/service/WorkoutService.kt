@@ -29,12 +29,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Job
 
 @AndroidEntryPoint
 class WorkoutService : Service() {
     companion object {
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "workout_channel"
+        private const val WAKE_LOCK_VERIFICATION_INTERVAL_MS = 30000L  // Check wake lock every 30 seconds
         
         const val ACTION_START_WORKOUT = "com.example.c25kbuddy.START_WORKOUT"
         const val ACTION_STOP_WORKOUT = "com.example.c25kbuddy.STOP_WORKOUT"
@@ -47,6 +50,7 @@ class WorkoutService : Service() {
     
     // Use var for serviceScope so it can be reassigned
     private var serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var wakeLockVerificationJob: Job? = null
     
     // Initialize repository in onCreate, but declare it as lateinit
     private lateinit var repository: C25KRepository
@@ -87,7 +91,7 @@ class WorkoutService : Service() {
         // Create wake lock
         val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
+            PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
             "C25KBuddy:WorkoutWakeLock"
         )
         
@@ -235,6 +239,10 @@ class WorkoutService : Service() {
                 workoutEngine.stopWorkout()
             }
             
+            // Cancel wake lock verification
+            wakeLockVerificationJob?.cancel()
+            wakeLockVerificationJob = null
+            
             // Release wake lock
             if (wakeLock.isHeld) {
                 wakeLock.release()
@@ -278,7 +286,7 @@ class WorkoutService : Service() {
         createNotificationChannel()
         
         val mainIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         
         val pendingIntent = PendingIntent.getActivity(
@@ -328,10 +336,11 @@ class WorkoutService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Workout"
             val descriptionText = "C25K Workout progress"
-            val importance = NotificationManager.IMPORTANCE_DEFAULT
+            val importance = NotificationManager.IMPORTANCE_HIGH
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
                 setShowBadge(false)
+                lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
             
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -371,6 +380,9 @@ class WorkoutService : Service() {
         val initialNotification = createInitialNotification(week, day)
         startForeground(NOTIFICATION_ID, initialNotification)
         android.util.Log.d("WorkoutService", "Foreground service started with initial notification")
+        
+        // Start wake lock verification
+        startWakeLockVerification()
         
         serviceScope.launch {
             try {
@@ -413,7 +425,7 @@ class WorkoutService : Service() {
         val pendingIntent = PendingIntent.getActivity(
             this, 0, 
             Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
             },
             PendingIntent.FLAG_IMMUTABLE
         )
@@ -507,6 +519,23 @@ class WorkoutService : Service() {
             android.util.Log.d("WorkoutService", "Workout stopped but service remains active")
         } catch (e: Exception) {
             android.util.Log.e("WorkoutService", "Error stopping workout", e)
+        }
+    }
+    
+    private fun startWakeLockVerification() {
+        wakeLockVerificationJob?.cancel()
+        wakeLockVerificationJob = serviceScope.launch {
+            while (workoutEngine.state.value.isActive) {
+                ensureWakeLock()
+                delay(WAKE_LOCK_VERIFICATION_INTERVAL_MS)
+            }
+        }
+    }
+    
+    private fun ensureWakeLock() {
+        if (!wakeLock.isHeld) {
+            android.util.Log.w("WorkoutService", "Wake lock was released, re-acquiring")
+            acquireWakeLock()
         }
     }
 } 
