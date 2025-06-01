@@ -18,10 +18,32 @@
             ]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [
+              300,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60,
+              300
+            ]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [
+              300,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60, 90,
+              60,
+              300
+            ]
           }
         ]
       },
@@ -32,10 +54,10 @@
             "segments": [300, 90, 120, 90, 120, 90, 120, 90, 120, 90, 120, 90, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 90, 120, 90, 120, 90, 120, 90, 120, 90, 120, 90, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 90, 120, 90, 120, 90, 120, 90, 120, 90, 120, 90, 300]
           }
         ]
       },
@@ -46,10 +68,10 @@
             "segments": [300, 90, 90, 180, 180, 90, 90, 180, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 90, 90, 180, 180, 90, 90, 180, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 90, 90, 180, 180, 90, 90, 180, 300]
           }
         ]
       },
@@ -60,10 +82,10 @@
             "segments": [300, 180, 90, 300, 150, 180, 90, 300, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 180, 90, 300, 150, 180, 90, 300, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 180, 90, 300, 150, 180, 90, 300, 300]
           }
         ]
       },
@@ -102,10 +124,10 @@
             "segments": [300, 1500, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1500, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1500, 300]
           }
         ]
       },
@@ -116,10 +138,10 @@
             "segments": [300, 1680, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1680, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1680, 300]
           }
         ]
       },
@@ -130,10 +152,10 @@
             "segments": [300, 1800, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1800, 300]
           },
           {
-            "segmentsReference": "same_as_day_1"
+            "segments": [300, 1800, 300]
           }
         ]
       }
